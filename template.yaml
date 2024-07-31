@@ -1,0 +1,94 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  split-pdf-files
+
+  Sample SAM Template for split-pdf-files
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 3
+    MemorySize: 128
+
+Resources:
+#Add Source S3 bucket
+  SourceS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
+
+  #Add Destination S3 bucket
+  DestinationS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+
+  SplitPdfFiles:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: split_pdf_files/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Architectures:
+        - x86_64  
+      #Add crud policy to source and destination S3 bucket
+      Policies:
+        - S3CrudPolicy:
+            BucketName:
+              Ref: SourceS3Bucket
+        - S3CrudPolicy:
+            BucketName:
+              Ref: DestinationS3Bucket
+      Environment:
+        Variables:
+          SOURCE_BUCKET: !Ref SourceS3Bucket
+          DESTINATION_BUCKET: !Ref DestinationS3Bucket
+      Events:
+        SplitPdfFilesEvent:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              source:
+                - aws.s3
+              detail-type:
+                - "Object Created"
+              detail:
+                bucket:
+                  name:
+                    - !Ref SourceS3Bucket
+Outputs:
+  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
+  # Find out more about other implicit resources you can reference within SAM
+  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+  SplitPdfFiles:
+    Description: "SplitPdfFiles Lambda Function ARN"
+    Value: !GetAtt SplitPdfFiles.Arn
+  SplitPdfFilesIamRole:
+    Description: "Implicit IAM Role created for SplitPdfFiles function"
+    Value: !GetAtt SplitPdfFilesRole.Arn
